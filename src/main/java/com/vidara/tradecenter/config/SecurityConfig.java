@@ -17,6 +17,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -26,18 +27,20 @@ public class SecurityConfig {
     private final CustomUserDetailsService userDetailsService;
     private final JwtAuthEntryPoint jwtAuthEntryPoint;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CorsConfigurationSource corsConfigurationSource;  // INJECT the bean
 
     public SecurityConfig(CustomUserDetailsService userDetailsService,
                           JwtAuthEntryPoint jwtAuthEntryPoint,
-                          JwtAuthenticationFilter jwtAuthenticationFilter) {
+                          JwtAuthenticationFilter jwtAuthenticationFilter,
+                          CorsConfigurationSource corsConfigurationSource) {  // ADD parameter
         this.userDetailsService = userDetailsService;
         this.jwtAuthEntryPoint = jwtAuthEntryPoint;
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.corsConfigurationSource = corsConfigurationSource;  // ASSIGN
     }
 
 
     // PASSWORD ENCODER
-    // BCrypt is industry standard for password hashing
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -46,7 +49,6 @@ public class SecurityConfig {
 
 
     // AUTHENTICATION PROVIDER
-    // Connects UserDetailsService + PasswordEncoder
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -58,7 +60,6 @@ public class SecurityConfig {
 
 
     // AUTHENTICATION MANAGER
-    // Used in AuthService to authenticate login requests
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
@@ -67,17 +68,14 @@ public class SecurityConfig {
 
 
     // SECURITY FILTER CHAIN
-    // Defines which endpoints are public vs protected
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // Disable CSRF (we use JWT, not sessions)
                 .csrf(csrf -> csrf.disable())
 
-                // Enable CORS
-                .cors(cors -> cors.configurationSource(
-                        new CorsConfig().corsConfigurationSource()))
+                // Enable CORS — USE INJECTED BEAN, not new instance
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
 
                 // Exception handling
                 .exceptionHandling(exception -> exception
@@ -90,7 +88,7 @@ public class SecurityConfig {
                 // URL Authorization Rules
                 .authorizeHttpRequests(auth -> auth
 
-                        // ======= PUBLIC ENDPOINTS =============
+                        // ======= PUBLIC ENDPOINTS ==============
 
                         // Auth endpoints (login, register)
                         .requestMatchers("/api/auth/**").permitAll()
@@ -118,7 +116,7 @@ public class SecurityConfig {
                         // Error pages
                         .requestMatchers("/error").permitAll()
 
-                        // ============== ADMIN ENDPOINTS ========
+                        // ======== ADMIN ENDPOINTS ==========
 
                         // Admin dashboard (requires ADMIN role)
                         .requestMatchers("/admin/**").hasRole("ADMIN")
@@ -136,7 +134,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/brands/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/brands/**").hasRole("ADMIN")
 
-                        // ========== AUTHENTICATED ENDPOINTS ==========
+                        // ====== AUTHENTICATED ENDPOINTS ===============
 
                         // All other requests require authentication
                         .anyRequest().authenticated()

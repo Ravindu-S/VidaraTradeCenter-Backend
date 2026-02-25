@@ -22,7 +22,7 @@ public class OpenApiConfig {
     //   http://localhost:8080/swagger-ui.html
     //   http://localhost:8080/v3/api-docs
     //
-    //UI to test all your APIs!
+    //UI to all your APIs
     @Bean
     public OpenAPI openAPI() {
         return new OpenAPI()
@@ -38,7 +38,7 @@ public class OpenApiConfig {
                                 .url("https://opensource.org/licenses/MIT")))
                 .servers(List.of(
                         new Server()
-                                .url("http://localhost:8080")
+                                .url("http://localhost:8081")
                                 .description("Local Development Server")))
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
                 .components(new Components()
