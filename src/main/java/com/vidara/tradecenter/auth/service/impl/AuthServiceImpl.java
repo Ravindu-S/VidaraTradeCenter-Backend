@@ -8,6 +8,7 @@ import com.vidara.tradecenter.auth.mapper.AuthMapper;
 import com.vidara.tradecenter.auth.service.AuthService;
 import com.vidara.tradecenter.common.exception.DuplicateResourceException;
 import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
+import com.vidara.tradecenter.common.exception.UnauthorizedException;
 import com.vidara.tradecenter.security.jwt.JwtTokenProvider;
 import com.vidara.tradecenter.user.model.Role;
 import com.vidara.tradecenter.user.model.User;
@@ -17,6 +18,7 @@ import com.vidara.tradecenter.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -93,9 +95,14 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public AuthResponse login(LoginRequest request) {
         // Authenticate with Spring Security
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
+        } catch (BadCredentialsException ex) {
+            throw new UnauthorizedException("Invalid email or password");
+        }
 
         // Generate JWT token
         String token = jwtTokenProvider.generateToken(authentication);
