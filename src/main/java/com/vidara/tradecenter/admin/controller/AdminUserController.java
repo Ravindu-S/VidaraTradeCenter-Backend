@@ -126,6 +126,32 @@ public class AdminUserController {
     }
 
 
+    // ==================== DELETE USER (AJAX) ====================
+
+    @DeleteMapping("/{id}")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> deleteUser(@PathVariable Long id) {
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            User user = userRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+
+            userRepository.delete(user);
+
+            response.put("success", true);
+            response.put("message", "User deleted successfully");
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+
     // ==================== VIEW USER DETAILS ====================
 
     @GetMapping("/{id}")
