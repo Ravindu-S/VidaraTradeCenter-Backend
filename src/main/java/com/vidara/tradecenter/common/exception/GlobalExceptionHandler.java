@@ -1,5 +1,7 @@
 package com.vidara.tradecenter.common.exception;
 
+import com.vidara.tradecenter.cart.exception.CartNotFoundException;
+import com.vidara.tradecenter.cart.exception.InsufficientStockException;
 import com.vidara.tradecenter.common.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +21,6 @@ public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-
     // 404 — Resource Not Found
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
@@ -28,7 +29,6 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(ex.getMessage()));
     }
-
 
     // 400 — Bad Request
     @ExceptionHandler(BadRequestException.class)
@@ -39,7 +39,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-
     // 401 — Unauthorized
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorized(UnauthorizedException ex) {
@@ -48,7 +47,6 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error(ex.getMessage()));
     }
-
 
     // 409 — Duplicate / Conflict
     @ExceptionHandler(DuplicateResourceException.class)
@@ -59,18 +57,17 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ex.getMessage()));
     }
 
-
     // 400 — Validation Errors (@Valid failures)
     // Returns field-level error messages
     //
     // Example response:
     // {
-    //   "success": false,
-    //   "message": "Validation failed",
-    //   "data": {
-    //     "email": "Email is required",
-    //     "password": "Password must be at least 8 characters"
-    //   }
+    // "success": false,
+    // "message": "Validation failed",
+    // "data": {
+    // "email": "Email is required",
+    // "password": "Password must be at least 8 characters"
+    // }
     // }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -90,7 +87,6 @@ public class GlobalExceptionHandler {
                 .body(new ApiResponse<>(false, "Validation failed", errors));
     }
 
-
     // 413 — File Too Large
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
@@ -98,6 +94,24 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiResponse.error("File size exceeds maximum allowed size"));
+    }
+
+    // 404 — Cart Not Found
+    @ExceptionHandler(CartNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCartNotFound(CartNotFoundException ex) {
+        logger.error("Cart not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 400 — Insufficient Stock
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInsufficientStock(InsufficientStockException ex) {
+        logger.error("Insufficient stock: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
     }
 
     // 500 — Everything Else (Catch-All)
