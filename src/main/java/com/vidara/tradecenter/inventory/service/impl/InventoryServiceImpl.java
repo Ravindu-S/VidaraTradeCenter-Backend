@@ -42,101 +42,57 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   @Transactional(readOnly = true)
   public boolean checkStockAvailability(Long productId, Integer quantity) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
-
+    Product product = getProductById(productId);
     return product.getStock() != null && product.getStock() >= quantity;
   }
 
   @Override
   public void reduceStock(Long productId, Integer quantity, String reason) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+    Product product = getProductById(productId);
+    Integer currentStock = getCurrentStock(product);
 
-    Integer currentStock = product.getStock() != null ? product.getStock() : 0;
+    validateSufficientStock(product, currentStock, quantity);
 
-    if (currentStock < quantity) {
-      throw new InsufficientStockException(product.getName(), quantity, currentStock);
-    }
-
-    Integer stockBefore = currentStock;
-    Integer stockAfter = currentStock - quantity;
-
-    product.setStock(stockAfter);
-    productRepository.save(product);
-
-    // Record adjustment
-    StockAdjustment adjustment = new StockAdjustment(
-        product,
-        -quantity,
-        stockBefore,
-        stockAfter,
-        StockAdjustmentType.ORDER_PLACED,
-        reason);
-    stockAdjustmentRepository.save(adjustment);
+    updateProductStock(product, currentStock - quantity);
+    recordAdjustment(product, -quantity, currentStock, currentStock - quantity,
+        StockAdjustmentType.ORDER_PLACED, reason, null);
 
     logger.info("Stock reduced for product {}: {} -> {} (quantity: {})",
-        product.getSku(), stockBefore, stockAfter, quantity);
+        product.getSku(), currentStock, currentStock - quantity, quantity);
   }
 
   @Override
   public void restoreStock(Long productId, Integer quantity, String reason) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+    Product product = getProductById(productId);
+    Integer currentStock = getCurrentStock(product);
+    Integer newStock = currentStock + quantity;
 
-    Integer currentStock = product.getStock() != null ? product.getStock() : 0;
-    Integer stockBefore = currentStock;
-    Integer stockAfter = currentStock + quantity;
-
-    product.setStock(stockAfter);
-    productRepository.save(product);
-
-    // Record adjustment
-    StockAdjustment adjustment = new StockAdjustment(
-        product,
-        quantity,
-        stockBefore,
-        stockAfter,
-        StockAdjustmentType.ORDER_CANCELLED,
-        reason);
-    stockAdjustmentRepository.save(adjustment);
+    updateProductStock(product, newStock);
+    recordAdjustment(product, quantity, currentStock, newStock,
+        StockAdjustmentType.ORDER_CANCELLED, reason, null);
 
     logger.info("Stock restored for product {}: {} -> {} (quantity: {})",
-        product.getSku(), stockBefore, stockAfter, quantity);
+        product.getSku(), currentStock, newStock, quantity);
   }
 
   @Override
   public StockAdjustmentResponse adjustStock(StockAdjustmentRequest request, Long userId) {
-    Product product = productRepository.findById(request.getProductId())
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()));
+    Product product = getProductById(request.getProductId());
+    User user = getUserById(userId);
 
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    Integer currentStock = getCurrentStock(product);
+    Integer newStock = currentStock + request.getQuantityChange();
 
-    Integer currentStock = product.getStock() != null ? product.getStock() : 0;
-    Integer stockBefore = currentStock;
-    Integer stockAfter = currentStock + request.getQuantityChange();
+    validateNonNegativeStock(newStock);
 
-    if (stockAfter < 0) {
-      throw new IllegalArgumentException("Stock cannot be negative after adjustment");
-    }
-
-    product.setStock(stockAfter);
-    productRepository.save(product);
-
-    // Record adjustment
-    StockAdjustment adjustment = new StockAdjustment(
-        product,
-        request.getQuantityChange(),
-        stockBefore,
-        stockAfter,
+    updateProductStock(product, newStock);
+    StockAdjustment adjustment = recordAdjustment(product, request.getQuantityChange(),
+        currentStock, newStock,
         StockAdjustmentType.MANUAL_ADJUSTMENT,
-        request.getReason());
-    adjustment.setAdjustedBy(user);
-    adjustment = stockAdjustmentRepository.save(adjustment);
+        request.getReason(), user);
 
     logger.info("Manual stock adjustment for product {} by user {}: {} -> {} (change: {})",
-        product.getSku(), user.getEmail(), stockBefore, stockAfter, request.getQuantityChange());
+        product.getSku(), user.getEmail(), currentStock, newStock, request.getQuantityChange());
 
     return toStockAdjustmentResponse(adjustment);
   }
@@ -144,38 +100,20 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   public void recordStockAdjustment(Long productId, Integer quantityChange,
       StockAdjustmentType type, String reason, Long userId) {
-    Product product = productRepository.findById(productId)
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+    Product product = getProductById(productId);
+    Integer currentStock = getCurrentStock(product);
+    Integer newStock = currentStock + quantityChange;
 
-    Integer currentStock = product.getStock() != null ? product.getStock() : 0;
-    Integer stockBefore = currentStock;
-    Integer stockAfter = currentStock + quantityChange;
+    updateProductStock(product, newStock);
 
-    product.setStock(stockAfter);
-    productRepository.save(product);
-
-    StockAdjustment adjustment = new StockAdjustment(
-        product,
-        quantityChange,
-        stockBefore,
-        stockAfter,
-        type,
-        reason);
-
-    if (userId != null) {
-      User user = userRepository.findById(userId).orElse(null);
-      adjustment.setAdjustedBy(user);
-    }
-
-    stockAdjustmentRepository.save(adjustment);
+    User user = userId != null ? userRepository.findById(userId).orElse(null) : null;
+    recordAdjustment(product, quantityChange, currentStock, newStock, type, reason, user);
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<LowStockProductResponse> getLowStockProducts() {
-    List<Product> products = productRepository.findAll();
-
-    return products.stream()
+    return productRepository.findAll().stream()
         .filter(Product::isLowStock)
         .map(this::toLowStockProductResponse)
         .collect(Collectors.toList());
@@ -184,9 +122,7 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   @Transactional(readOnly = true)
   public List<LowStockProductResponse> getOutOfStockProducts() {
-    List<Product> products = productRepository.findAll();
-
-    return products.stream()
+    return productRepository.findAll().stream()
         .filter(Product::isOutOfStock)
         .map(this::toLowStockProductResponse)
         .collect(Collectors.toList());
@@ -195,15 +131,54 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   @Transactional(readOnly = true)
   public List<StockAdjustmentResponse> getStockHistory(Long productId) {
-    List<StockAdjustment> adjustments = stockAdjustmentRepository
-        .findByProductIdOrderByCreatedAtDesc(productId);
-
-    return adjustments.stream()
+    return stockAdjustmentRepository.findByProductIdOrderByCreatedAtDesc(productId).stream()
         .map(this::toStockAdjustmentResponse)
         .collect(Collectors.toList());
   }
 
   // PRIVATE HELPER METHODS
+
+  private Product getProductById(Long productId) {
+    return productRepository.findById(productId)
+        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+  }
+
+  private User getUserById(Long userId) {
+    return userRepository.findById(userId)
+        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+  }
+
+  private Integer getCurrentStock(Product product) {
+    return product.getStock() != null ? product.getStock() : 0;
+  }
+
+  private void updateProductStock(Product product, Integer newStock) {
+    product.setStock(newStock);
+    productRepository.save(product);
+  }
+
+  private void validateSufficientStock(Product product, Integer currentStock, Integer requestedQuantity) {
+    if (currentStock < requestedQuantity) {
+      throw new InsufficientStockException(product.getName(), requestedQuantity, currentStock);
+    }
+  }
+
+  private void validateNonNegativeStock(Integer stock) {
+    if (stock < 0) {
+      throw new IllegalArgumentException("Stock cannot be negative after adjustment");
+    }
+  }
+
+  private StockAdjustment recordAdjustment(Product product, Integer quantityChange,
+      Integer stockBefore, Integer stockAfter,
+      StockAdjustmentType type, String reason, User user) {
+    StockAdjustment adjustment = new StockAdjustment(product, quantityChange,
+        stockBefore, stockAfter, type, reason);
+    if (user != null) {
+      adjustment.setAdjustedBy(user);
+    }
+    return stockAdjustmentRepository.save(adjustment);
+  }
 
   private StockAdjustmentResponse toStockAdjustmentResponse(StockAdjustment adjustment) {
     StockAdjustmentResponse response = new StockAdjustmentResponse();

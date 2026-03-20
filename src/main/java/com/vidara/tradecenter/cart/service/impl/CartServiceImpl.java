@@ -48,107 +48,47 @@ public class CartServiceImpl implements CartService {
   @Override
   @Transactional(readOnly = true)
   public CartResponse getOrCreateCart(Long userId) {
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-
-    Cart cart = cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
-        .orElseGet(() -> {
-          Cart newCart = new Cart(user);
-          return cartRepository.save(newCart);
-        });
-
+    User user = getUserById(userId);
+    Cart cart = getOrCreateActiveCart(user);
     return cartMapper.toCartResponse(cart);
   }
 
   @Override
   public CartResponse addToCart(Long userId, AddToCartRequest request) {
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    User user = getUserById(userId);
+    Product product = getProductById(request.getProductId());
 
-    Product product = productRepository.findById(request.getProductId())
-        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()));
+    validateStockAvailability(product, request.getQuantity());
 
-    // Check stock availability
-    if (product.getStock() == null || product.getStock() < request.getQuantity()) {
-      throw new InsufficientStockException(
-          product.getName(),
-          request.getQuantity(),
-          product.getStock() != null ? product.getStock() : 0);
-    }
-
-    // Get or create active cart
-    Cart cart = cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
-        .orElseGet(() -> {
-          Cart newCart = new Cart(user);
-          return cartRepository.save(newCart);
-        });
-
-    // Check if product already in cart
+    Cart cart = getOrCreateActiveCart(user);
     Optional<CartItem> existingItem = cartItemRepository.findByCartAndProduct(cart, product);
 
     if (existingItem.isPresent()) {
-      // Update quantity
-      CartItem item = existingItem.get();
-      int newQuantity = item.getQuantity() + request.getQuantity();
-
-      // Validate new quantity against stock
-      if (product.getStock() < newQuantity) {
-        throw new InsufficientStockException(
-            product.getName(),
-            newQuantity,
-            product.getStock());
-      }
-
-      item.setQuantity(newQuantity);
-      cartItemRepository.save(item);
+      updateExistingCartItem(existingItem.get(), product, request.getQuantity());
     } else {
-      // Create new cart item
-      BigDecimal price = product.getSalePrice() != null ? product.getSalePrice() : product.getBasePrice();
-      CartItem newItem = new CartItem(cart, product, request.getQuantity(), price);
-      cart.addItem(newItem);
-      cartItemRepository.save(newItem);
+      addNewCartItem(cart, product, request.getQuantity());
     }
 
-    cart = cartRepository.save(cart);
-    return cartMapper.toCartResponse(cart);
+    return cartMapper.toCartResponse(cartRepository.save(cart));
   }
 
   @Override
   public CartResponse updateCartItem(Long userId, Long cartItemId, UpdateCartItemRequest request) {
-    CartItem cartItem = cartItemRepository.findById(cartItemId)
-        .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", cartItemId));
+    CartItem cartItem = getCartItemById(cartItemId);
+    verifyCartOwnership(cartItem, userId);
 
-    // Verify cart belongs to user
-    if (!cartItem.getCart().getUser().getId().equals(userId)) {
-      throw new CartNotFoundException("Cart item does not belong to user");
-    }
-
-    Product product = cartItem.getProduct();
-
-    // Validate stock
-    if (product.getStock() == null || product.getStock() < request.getQuantity()) {
-      throw new InsufficientStockException(
-          product.getName(),
-          request.getQuantity(),
-          product.getStock() != null ? product.getStock() : 0);
-    }
+    validateStockAvailability(cartItem.getProduct(), request.getQuantity());
 
     cartItem.setQuantity(request.getQuantity());
     cartItemRepository.save(cartItem);
 
-    Cart cart = cartItem.getCart();
-    return cartMapper.toCartResponse(cart);
+    return cartMapper.toCartResponse(cartItem.getCart());
   }
 
   @Override
   public CartResponse removeCartItem(Long userId, Long cartItemId) {
-    CartItem cartItem = cartItemRepository.findById(cartItemId)
-        .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", cartItemId));
-
-    // Verify cart belongs to user
-    if (!cartItem.getCart().getUser().getId().equals(userId)) {
-      throw new CartNotFoundException("Cart item does not belong to user");
-    }
+    CartItem cartItem = getCartItemById(cartItemId);
+    verifyCartOwnership(cartItem, userId);
 
     Cart cart = cartItem.getCart();
     cart.removeItem(cartItem);
@@ -159,11 +99,8 @@ public class CartServiceImpl implements CartService {
 
   @Override
   public void clearCart(Long userId) {
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-
-    Cart cart = cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
-        .orElseThrow(() -> new CartNotFoundException(userId));
+    User user = getUserById(userId);
+    Cart cart = getActiveCart(user);
 
     cartItemRepository.deleteByCartId(cart.getId());
     cart.getItems().clear();
@@ -173,12 +110,66 @@ public class CartServiceImpl implements CartService {
   @Override
   @Transactional(readOnly = true)
   public CartResponse getActiveCart(Long userId) {
-    User user = userRepository.findById(userId)
-        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
-
-    Cart cart = cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
-        .orElseThrow(() -> new CartNotFoundException(userId));
-
+    User user = getUserById(userId);
+    Cart cart = getActiveCart(user);
     return cartMapper.toCartResponse(cart);
+  }
+
+  // PRIVATE HELPER METHODS
+
+  private User getUserById(Long userId) {
+    return userRepository.findById(userId)
+        .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+  }
+
+  private Product getProductById(Long productId) {
+    return productRepository.findById(productId)
+        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", productId));
+  }
+
+  private CartItem getCartItemById(Long cartItemId) {
+    return cartItemRepository.findById(cartItemId)
+        .orElseThrow(() -> new ResourceNotFoundException("CartItem", "id", cartItemId));
+  }
+
+  private Cart getOrCreateActiveCart(User user) {
+    return cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
+        .orElseGet(() -> cartRepository.save(new Cart(user)));
+  }
+
+  private Cart getActiveCart(User user) {
+    return cartRepository.findByUserAndStatus(user, CartStatus.ACTIVE)
+        .orElseThrow(() -> new CartNotFoundException(user.getId()));
+  }
+
+  private void validateStockAvailability(Product product, Integer requestedQuantity) {
+    Integer availableStock = product.getStock() != null ? product.getStock() : 0;
+
+    if (availableStock < requestedQuantity) {
+      throw new InsufficientStockException(
+          product.getName(),
+          requestedQuantity,
+          availableStock);
+    }
+  }
+
+  private void verifyCartOwnership(CartItem cartItem, Long userId) {
+    if (!cartItem.getCart().getUser().getId().equals(userId)) {
+      throw new CartNotFoundException("Cart item does not belong to user");
+    }
+  }
+
+  private void updateExistingCartItem(CartItem item, Product product, Integer additionalQuantity) {
+    int newQuantity = item.getQuantity() + additionalQuantity;
+    validateStockAvailability(product, newQuantity);
+    item.setQuantity(newQuantity);
+    cartItemRepository.save(item);
+  }
+
+  private void addNewCartItem(Cart cart, Product product, Integer quantity) {
+    BigDecimal price = product.getSalePrice() != null ? product.getSalePrice() : product.getBasePrice();
+    CartItem newItem = new CartItem(cart, product, quantity, price);
+    cart.addItem(newItem);
+    cartItemRepository.save(newItem);
   }
 }
