@@ -54,6 +54,8 @@ public class ProductMapper {
         response.setBasePrice(product.getBasePrice());
         response.setSalePrice(product.getSalePrice());
         response.setStatus(product.getStatus().name());
+        response.setStock(product.getStock());
+        response.setLowStockThreshold(product.getLowStockThreshold());
 
         // Primary image URL
         if (product.getImages() != null && !product.getImages().isEmpty()) {
