@@ -2,6 +2,8 @@ package com.vidara.tradecenter.common.exception;
 
 import com.vidara.tradecenter.cart.exception.CartNotFoundException;
 import com.vidara.tradecenter.cart.exception.InsufficientStockException;
+import com.vidara.tradecenter.inventory.exception.NegativeStockException;
+import com.vidara.tradecenter.inventory.exception.StockOperationException;
 import com.vidara.tradecenter.common.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -109,6 +111,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InsufficientStockException.class)
     public ResponseEntity<ApiResponse<Void>> handleInsufficientStock(InsufficientStockException ex) {
         logger.error("Insufficient stock: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 400 — Negative Stock
+    @ExceptionHandler(NegativeStockException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNegativeStock(NegativeStockException ex) {
+        logger.error("Negative stock error: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 400 — Stock Operation Failed
+    @ExceptionHandler(StockOperationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStockOperation(StockOperationException ex) {
+        logger.error("Stock operation failed: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // 400 — Illegal Argument
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        logger.error("Illegal argument: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error(ex.getMessage()));

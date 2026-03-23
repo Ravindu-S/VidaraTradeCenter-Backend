@@ -3,6 +3,7 @@ package com.vidara.tradecenter.product.model;
 import com.vidara.tradecenter.common.base.BaseEntity;
 import com.vidara.tradecenter.product.model.enums.ProductStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Min;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -47,9 +48,11 @@ public class Product extends BaseEntity {
     private String dimensions;
 
     @Column(name = "stock")
+    @Min(value = 0, message = "Stock cannot be negative")
     private Integer stock = 0;
 
     @Column(name = "low_stock_threshold")
+    @Min(value = 0, message = "Low stock threshold cannot be negative")
     private Integer lowStockThreshold = 10;
 
     // RELATIONSHIPS

@@ -3,6 +3,7 @@ package com.vidara.tradecenter.product.dto.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -37,8 +38,10 @@ public class ProductRequest {
     @Size(max = 100, message = "Dimensions must be less than 100 characters")
     private String dimensions;
 
+    @Min(value = 0, message = "Stock cannot be negative")
     private Integer stock;
 
+    @Min(value = 0, message = "Low stock threshold cannot be negative")
     private Integer lowStockThreshold;
 
     private List<String> tags;
