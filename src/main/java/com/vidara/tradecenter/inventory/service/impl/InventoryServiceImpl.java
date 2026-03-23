@@ -43,12 +43,21 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   @Transactional(readOnly = true)
   public boolean checkStockAvailability(Long productId, Integer quantity) {
+    logger.debug("Checking stock availability for product ID {}: requested quantity {}", productId, quantity);
     Product product = getProductById(productId);
-    return product.getStock() != null && product.getStock() >= quantity;
+    boolean available = product.getStock() != null && product.getStock() >= quantity;
+
+    if (!available) {
+      logger.warn("Insufficient stock for product {} ({}): available {}, requested {}",
+          product.getSku(), product.getName(), product.getStock(), quantity);
+    }
+
+    return available;
   }
 
   @Override
   public void reduceStock(Long productId, Integer quantity, String reason) {
+    logger.info("Reducing stock for product ID {}: quantity {}, reason: {}", productId, quantity, reason);
     Product product = getProductById(productId);
     Integer currentStock = getCurrentStock(product);
 
@@ -64,6 +73,7 @@ public class InventoryServiceImpl implements InventoryService {
 
   @Override
   public void restoreStock(Long productId, Integer quantity, String reason) {
+    logger.info("Restoring stock for product ID {}: quantity {}, reason: {}", productId, quantity, reason);
     Product product = getProductById(productId);
     Integer currentStock = getCurrentStock(product);
     Integer newStock = currentStock + quantity;
@@ -114,25 +124,35 @@ public class InventoryServiceImpl implements InventoryService {
   @Override
   @Transactional(readOnly = true)
   public List<LowStockProductResponse> getLowStockProducts() {
-    return productRepository.findLowStockProducts(Pageable.unpaged()).stream()
+    logger.debug("Fetching low stock products");
+    List<LowStockProductResponse> products = productRepository.findLowStockProducts(Pageable.unpaged()).stream()
         .map(this::toLowStockProductResponse)
         .collect(Collectors.toList());
+    logger.info("Found {} low stock products", products.size());
+    return products;
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<LowStockProductResponse> getOutOfStockProducts() {
-    return productRepository.findOutOfStockProducts(Pageable.unpaged()).stream()
+    logger.debug("Fetching out of stock products");
+    List<LowStockProductResponse> products = productRepository.findOutOfStockProducts(Pageable.unpaged()).stream()
         .map(this::toLowStockProductResponse)
         .collect(Collectors.toList());
+    logger.info("Found {} out of stock products", products.size());
+    return products;
   }
 
   @Override
   @Transactional(readOnly = true)
   public List<StockAdjustmentResponse> getStockHistory(Long productId) {
-    return stockAdjustmentRepository.findByProductIdOrderByCreatedAtDesc(productId).stream()
+    logger.debug("Fetching stock adjustment history for product ID {}", productId);
+    List<StockAdjustmentResponse> history = stockAdjustmentRepository.findByProductIdOrderByCreatedAtDesc(productId)
+        .stream()
         .map(this::toStockAdjustmentResponse)
         .collect(Collectors.toList());
+    logger.info("Retrieved {} stock adjustment records for product ID {}", history.size(), productId);
+    return history;
   }
 
   // PRIVATE HELPER METHODS
@@ -207,5 +227,82 @@ public class InventoryServiceImpl implements InventoryService {
         product.getStock(),
         product.getLowStockThreshold(),
         product.getStatus().name());
+  }
+
+  @Override
+  public void bulkReduceStock(List<Long> productIds, List<Integer> quantities, String reason) {
+    if (productIds.size() != quantities.size()) {
+      throw new IllegalArgumentException("Product IDs and quantities lists must have the same size");
+    }
+
+    logger.info("Starting bulk stock reduction for {} products. Reason: {}", productIds.size(), reason);
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (int i = 0; i < productIds.size(); i++) {
+      Long productId = productIds.get(i);
+      Integer quantity = quantities.get(i);
+
+      try {
+        reduceStock(productId, quantity, reason);
+        successCount++;
+        logger.debug("Successfully reduced stock for product ID {}: quantity {}", productId, quantity);
+      } catch (Exception e) {
+        failureCount++;
+        logger.error("Failed to reduce stock for product ID {}: {}", productId, e.getMessage());
+      }
+    }
+
+    logger.info("Bulk stock reduction completed. Success: {}, Failures: {}", successCount, failureCount);
+  }
+
+  @Override
+  public void bulkRestoreStock(List<Long> productIds, List<Integer> quantities, String reason) {
+    if (productIds.size() != quantities.size()) {
+      throw new IllegalArgumentException("Product IDs and quantities lists must have the same size");
+    }
+
+    logger.info("Starting bulk stock restoration for {} products. Reason: {}", productIds.size(), reason);
+    int successCount = 0;
+    int failureCount = 0;
+
+    for (int i = 0; i < productIds.size(); i++) {
+      Long productId = productIds.get(i);
+      Integer quantity = quantities.get(i);
+
+      try {
+        restoreStock(productId, quantity, reason);
+        successCount++;
+        logger.debug("Successfully restored stock for product ID {}: quantity {}", productId, quantity);
+      } catch (Exception e) {
+        failureCount++;
+        logger.error("Failed to restore stock for product ID {}: {}", productId, e.getMessage());
+      }
+    }
+
+    logger.info("Bulk stock restoration completed. Success: {}, Failures: {}", successCount, failureCount);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public boolean checkBulkStockAvailability(List<Long> productIds, List<Integer> quantities) {
+    if (productIds.size() != quantities.size()) {
+      throw new IllegalArgumentException("Product IDs and quantities lists must have the same size");
+    }
+
+    logger.debug("Checking bulk stock availability for {} products", productIds.size());
+
+    for (int i = 0; i < productIds.size(); i++) {
+      Long productId = productIds.get(i);
+      Integer quantity = quantities.get(i);
+
+      if (!checkStockAvailability(productId, quantity)) {
+        logger.warn("Insufficient stock for product ID {}: requested {}", productId, quantity);
+        return false;
+      }
+    }
+
+    logger.debug("Bulk stock availability check passed for all {} products", productIds.size());
+    return true;
   }
 }

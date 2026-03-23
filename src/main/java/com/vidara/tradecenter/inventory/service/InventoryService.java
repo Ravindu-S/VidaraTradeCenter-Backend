@@ -49,4 +49,19 @@ public interface InventoryService {
    * Get stock adjustment history for a product
    */
   List<StockAdjustmentResponse> getStockHistory(Long productId);
+
+  /**
+   * Bulk reduce stock for multiple products (order processing)
+   */
+  void bulkReduceStock(List<Long> productIds, List<Integer> quantities, String reason);
+
+  /**
+   * Bulk restore stock for multiple products (order cancellation)
+   */
+  void bulkRestoreStock(List<Long> productIds, List<Integer> quantities, String reason);
+
+  /**
+   * Check stock availability for multiple products at once
+   */
+  boolean checkBulkStockAvailability(List<Long> productIds, List<Integer> quantities);
 }
