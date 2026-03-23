@@ -27,6 +27,9 @@ public class CartItem extends BaseEntity {
   @Column(name = "price", nullable = false, precision = 10, scale = 2)
   private BigDecimal price;
 
+  @Column(name = "price_at_addition", precision = 10, scale = 2)
+  private BigDecimal priceAtAddition;
+
   // CONSTRUCTORS
 
   public CartItem() {
@@ -37,12 +40,24 @@ public class CartItem extends BaseEntity {
     this.product = product;
     this.quantity = quantity;
     this.price = price;
+    this.priceAtAddition = price;
   }
 
   // HELPER METHODS
 
   public BigDecimal getSubtotal() {
     return price.multiply(BigDecimal.valueOf(quantity));
+  }
+
+  public boolean hasPriceChanged() {
+    return priceAtAddition != null && !price.equals(priceAtAddition);
+  }
+
+  public BigDecimal getPriceDifference() {
+    if (priceAtAddition == null) {
+      return BigDecimal.ZERO;
+    }
+    return price.subtract(priceAtAddition);
   }
 
   // GETTERS AND SETTERS
@@ -77,5 +92,13 @@ public class CartItem extends BaseEntity {
 
   public void setPrice(BigDecimal price) {
     this.price = price;
+  }
+
+  public BigDecimal getPriceAtAddition() {
+    return priceAtAddition;
+  }
+
+  public void setPriceAtAddition(BigDecimal priceAtAddition) {
+    this.priceAtAddition = priceAtAddition;
   }
 }

@@ -47,6 +47,8 @@ public class CartMapper {
     response.setPrice(cartItem.getPrice());
     response.setQuantity(cartItem.getQuantity());
     response.setSubtotal(cartItem.getSubtotal());
+    response.setPriceAtAddition(cartItem.getPriceAtAddition());
+    response.setPriceChanged(cartItem.hasPriceChanged());
 
     return response;
   }

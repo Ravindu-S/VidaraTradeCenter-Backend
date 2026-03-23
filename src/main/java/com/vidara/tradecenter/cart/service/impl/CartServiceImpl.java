@@ -140,6 +140,37 @@ public class CartServiceImpl implements CartService {
     return cartMapper.toCartResponse(cart);
   }
 
+  @Override
+  public CartResponse syncCartPrices(Long userId) {
+    logger.info("Syncing cart prices for user {}", userId);
+
+    User user = getUserById(userId);
+    Cart cart = getActiveCart(user);
+
+    int updatedCount = 0;
+    int unchangedCount = 0;
+
+    for (CartItem item : cart.getItems()) {
+      Product product = item.getProduct();
+      BigDecimal currentPrice = product.getSalePrice() != null ? product.getSalePrice() : product.getBasePrice();
+
+      if (!item.getPrice().equals(currentPrice)) {
+        logger.info("Price changed for product {} in cart: {} -> {}",
+            product.getSku(), item.getPrice(), currentPrice);
+        item.setPrice(currentPrice);
+        cartItemRepository.save(item);
+        updatedCount++;
+      } else {
+        unchangedCount++;
+      }
+    }
+
+    logger.info("Cart price sync completed for user {}: {} updated, {} unchanged",
+        userId, updatedCount, unchangedCount);
+
+    return cartMapper.toCartResponse(cartRepository.save(cart));
+  }
+
   // PRIVATE HELPER METHODS
 
   private User getUserById(Long userId) {

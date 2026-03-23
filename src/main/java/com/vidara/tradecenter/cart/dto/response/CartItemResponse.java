@@ -12,6 +12,8 @@ public class CartItemResponse {
   private BigDecimal price;
   private Integer quantity;
   private BigDecimal subtotal;
+  private BigDecimal priceAtAddition;
+  private Boolean priceChanged;
 
   // CONSTRUCTORS
 
@@ -82,5 +84,21 @@ public class CartItemResponse {
 
   public void setSubtotal(BigDecimal subtotal) {
     this.subtotal = subtotal;
+  }
+
+  public BigDecimal getPriceAtAddition() {
+    return priceAtAddition;
+  }
+
+  public void setPriceAtAddition(BigDecimal priceAtAddition) {
+    this.priceAtAddition = priceAtAddition;
+  }
+
+  public Boolean getPriceChanged() {
+    return priceChanged;
+  }
+
+  public void setPriceChanged(Boolean priceChanged) {
+    this.priceChanged = priceChanged;
   }
 }

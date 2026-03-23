@@ -35,4 +35,9 @@ public interface CartService {
    * Get active cart for user
    */
   CartResponse getActiveCart(Long userId);
+
+  /**
+   * Sync cart item prices with current product prices
+   */
+  CartResponse syncCartPrices(Long userId);
 }

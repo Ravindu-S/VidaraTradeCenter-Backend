@@ -73,4 +73,12 @@ public class CartController {
     cartService.clearCart(currentUser.getId());
     return ResponseEntity.ok(ApiResponse.success("Cart cleared successfully"));
   }
+
+  @PostMapping("/sync-prices")
+  @PreAuthorize("isAuthenticated()")
+  @Operation(summary = "Sync cart prices", description = "Update cart item prices to match current product prices")
+  public ResponseEntity<ApiResponse<CartResponse>> syncCartPrices(@CurrentUser CustomUserDetails currentUser) {
+    CartResponse cart = cartService.syncCartPrices(currentUser.getId());
+    return ResponseEntity.ok(ApiResponse.success("Cart prices synchronized successfully", cart));
+  }
 }
