@@ -36,9 +36,6 @@ public class PayHereService {
         this.orderRepository = orderRepository;
     }
 
-    /**
-     * Build the response object that the frontend uses to call payhere.startPayment().
-     */
     @Transactional
     public PaymentInitiateResponse initiatePayment(Long userId, String orderNumber, String serverBaseUrl) {
         Order order = orderRepository.findByOrderNumber(orderNumber)
@@ -106,10 +103,6 @@ public class PayHereService {
         return response;
     }
 
-    /**
-     * Handle the server-to-server POST from PayHere.
-     * Verifies the MD5 signature, then updates order + payment status.
-     */
     @Transactional
     public void handleNotification(HttpServletRequest request) {
         String merchantId = param(request, "merchant_id");
@@ -148,7 +141,6 @@ public class PayHereService {
                     return new ResourceNotFoundException("Order", "orderNumber", orderId);
                 });
 
-        // status_code: 2 = success, 0 = pending, -1 = canceled, -2 = failed, -3 = chargedback
         int code = Integer.parseInt(statusCode);
 
         switch (code) {
@@ -176,11 +168,6 @@ public class PayHereService {
         orderRepository.save(order);
     }
 
-    // ---------- hash utilities ----------
-
-    /**
-     * Checkout hash: UPPERCASE( MD5( merchant_id + order_id + amount + currency + UPPERCASE(MD5(secret)) ) )
-     */
     private String generateCheckoutHash(String merchantId, String orderId,
                                         String amount, String currency,
                                         String merchantSecret) {
@@ -188,10 +175,6 @@ public class PayHereService {
         return md5(merchantId + orderId + amount + currency + secretHash).toUpperCase();
     }
 
-    /**
-     * Notification verification hash:
-     * UPPERCASE( MD5( merchant_id + order_id + payhere_amount + payhere_currency + status_code + UPPERCASE(MD5(secret)) ) )
-     */
     private String generateNotifyHash(String merchantId, String orderId,
                                       String amount, String currency,
                                       String statusCode, String merchantSecret) {

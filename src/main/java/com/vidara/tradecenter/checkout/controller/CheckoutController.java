@@ -1,8 +1,9 @@
 package com.vidara.tradecenter.checkout.controller;
 
-import com.vidara.tradecenter.common.dto.ApiResponse;
-import com.vidara.tradecenter.checkout.dto.*;
+import com.vidara.tradecenter.checkout.dto.CheckoutRequest;
+import com.vidara.tradecenter.checkout.dto.CheckoutResponse;
 import com.vidara.tradecenter.checkout.service.CheckoutService;
+import com.vidara.tradecenter.common.dto.ApiResponse;
 import com.vidara.tradecenter.security.CurrentUser;
 import com.vidara.tradecenter.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -20,25 +21,13 @@ public class CheckoutController {
         this.checkoutService = checkoutService;
     }
 
-    @PostMapping("/preview")
-    public ResponseEntity<ApiResponse<CheckoutPreviewResponse>> preview(
+    @PostMapping("/place-order")
+    public ResponseEntity<ApiResponse<CheckoutResponse>> placeOrder(
             @CurrentUser CustomUserDetails currentUser,
-            @Valid @RequestBody CheckoutPreviewRequest request) {
-        CheckoutPreviewResponse response =
-                checkoutService.preview(currentUser.getId(), request);
-        return ResponseEntity
-                .ok(ApiResponse.success("Checkout preview computed successfully", response));
-    }
-
-    @PostMapping("/orders")
-    public ResponseEntity<ApiResponse<CheckoutOrderResponse>> placeOrder(
-            @CurrentUser CustomUserDetails currentUser,
-            @Valid @RequestBody CheckoutOrderRequest request) {
-        CheckoutOrderResponse response =
-                checkoutService.placeOrder(currentUser.getId(), request);
+            @Valid @RequestBody CheckoutRequest request) {
+        CheckoutResponse response = checkoutService.placeOrder(currentUser.getId(), request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order created successfully", response));
     }
 }
-
