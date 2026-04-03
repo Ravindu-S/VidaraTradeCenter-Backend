@@ -1,7 +1,7 @@
 package com.vidara.tradecenter.order.controller;
 
 import com.vidara.tradecenter.common.dto.ApiResponse;
-import com.vidara.tradecenter.common.exception.BadRequestException;
+import com.vidara.tradecenter.common.exception.ForbiddenException;
 import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
 import com.vidara.tradecenter.order.dto.OrderListResponse;
 import com.vidara.tradecenter.order.model.Order;
@@ -63,7 +63,7 @@ public class OrderController {
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
 
         if (!order.getUser().getId().equals(currentUser.getId())) {
-            throw new BadRequestException("Order does not belong to this user");
+            throw new ForbiddenException("Order does not belong to this user");
         }
 
         OrderListResponse response = OrderListResponse.fromEntityDetailed(order);
