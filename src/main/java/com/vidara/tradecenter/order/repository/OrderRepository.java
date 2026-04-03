@@ -24,8 +24,30 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     boolean existsByOrderNumber(String orderNumber);
 
     Page<Order> findByUserIdOrderByOrderDateDesc(Long userId, Pageable pageable);
+    Page<Order> findByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
+    Optional<Order> findByIdAndUserId(Long orderId, Long userId);
+    Page<Order> findByUserIdAndOrderStatus(Long userId, OrderStatus status, Pageable pageable);
+    // Story-name alias for team consistency; explicit JPQL avoids invalid derived query parsing.
+    @Query("SELECT o FROM Order o WHERE o.user.id = :userId AND o.orderStatus = :status")
+    Page<Order> findByUserIdAndStatus(
+            @Param("userId") Long userId,
+            @Param("status") OrderStatus status,
+            Pageable pageable);
 
     long countByOrderStatus(OrderStatus status);
+
+    @Query("SELECT o FROM Order o WHERE o.user.id = :userId " +
+            "AND (:status IS NULL OR o.orderStatus = :status) " +
+            "AND (:search IS NULL OR LOWER(o.orderNumber) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+            "AND (:startDate IS NULL OR o.orderDate >= :startDate) " +
+            "AND (:endDate IS NULL OR o.orderDate <= :endDate)")
+    Page<Order> findOrderHistoryWithFilters(
+            @Param("userId") Long userId,
+            @Param("status") OrderStatus status,
+            @Param("search") String search,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable);
 
 
     // ===== ADMIN: FILTERED LISTING (Native Query) =====
