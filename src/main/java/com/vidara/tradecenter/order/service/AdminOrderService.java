@@ -2,6 +2,8 @@ package com.vidara.tradecenter.order.service;
 
 import com.vidara.tradecenter.common.exception.BadRequestException;
 import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
+import com.vidara.tradecenter.notification.dto.OrderStatusUpdateEmail;
+import com.vidara.tradecenter.notification.event.OrderStatusChangedEvent;
 import com.vidara.tradecenter.order.dto.OrderListResponse;
 import com.vidara.tradecenter.order.dto.OrderStatisticsResponse;
 import com.vidara.tradecenter.order.dto.UpdateOrderStatusRequest;
@@ -11,6 +13,7 @@ import com.vidara.tradecenter.order.model.enums.PaymentStatus;
 import com.vidara.tradecenter.order.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,9 +30,11 @@ public class AdminOrderService {
     private static final Logger logger = LoggerFactory.getLogger(AdminOrderService.class);
 
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public AdminOrderService(OrderRepository orderRepository) {
+    public AdminOrderService(OrderRepository orderRepository, ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -106,6 +111,21 @@ public class AdminOrderService {
 
         Order savedOrder = orderRepository.save(order);
         logger.info("Order {} status updated: {} → {}", orderId, currentStatus, newStatus);
+
+        try {
+            OrderStatusUpdateEmail emailData = new OrderStatusUpdateEmail(
+                    savedOrder.getUser().getFullName(),
+                    savedOrder.getUser().getEmail(),
+                    savedOrder.getOrderNumber(),
+                    currentStatus.name(),
+                    newStatus.name());
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(this, emailData));
+            logger.info("Published OrderStatusChangedEvent for order {} ({} → {})",
+                    savedOrder.getOrderNumber(), currentStatus, newStatus);
+        } catch (Exception e) {
+            logger.warn("Failed to publish order status change event for order {}: {}",
+                    orderId, e.getMessage());
+        }
 
         return OrderListResponse.fromEntity(savedOrder);
     }

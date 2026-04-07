@@ -13,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -62,7 +63,11 @@ public class OrderController {
         Order order = orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
 
-        if (!order.getUser().getId().equals(currentUser.getId())) {
+        boolean owner = order.getUser().getId().equals(currentUser.getId());
+        boolean admin = currentUser.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_ADMIN"::equals);
+        if (!owner && !admin) {
             throw new BadRequestException("Order does not belong to this user");
         }
 
