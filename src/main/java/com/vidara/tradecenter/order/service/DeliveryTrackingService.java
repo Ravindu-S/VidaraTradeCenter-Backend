@@ -42,7 +42,6 @@ public class DeliveryTrackingService {
     public DeliveryStatusResponse getDeliveryStatus(Long userId, String orderNumber) {
         logger.info("User {} fetching delivery status for order {}", userId, orderNumber);
 
-        // Verify order exists and belongs to user
         Order order = orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", orderNumber));
 
@@ -50,13 +49,11 @@ public class DeliveryTrackingService {
             throw new BadRequestException("Order does not belong to this user");
         }
 
-        // Get delivery tracking
         Optional<DeliveryTracking> tracking = deliveryTrackingRepository.findByOrderId(order.getId());
 
         if (tracking.isPresent()) {
             return DeliveryStatusResponse.fromEntity(tracking.get());
         } else {
-            // Return a "not started" response for orders without tracking yet
             return DeliveryStatusResponse.notStarted(orderNumber);
         }
     }
@@ -100,6 +97,25 @@ public class DeliveryTrackingService {
     // ===== ADMIN METHODS =====
 
     /**
+     * Get delivery tracking by order ID (admin view - no user ownership check)
+     */
+    @Transactional(readOnly = true)
+    public DeliveryStatusResponse getDeliveryTrackingByOrderId(Long orderId) {
+        logger.info("Admin fetching delivery tracking for order {}", orderId);
+
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        Optional<DeliveryTracking> tracking = deliveryTrackingRepository.findByOrderId(orderId);
+
+        if (tracking.isPresent()) {
+            return DeliveryStatusResponse.fromEntity(tracking.get());
+        } else {
+            return DeliveryStatusResponse.notStarted(order.getOrderNumber());
+        }
+    }
+
+    /**
      * Create delivery tracking for an order (admin)
      */
     @Transactional
@@ -112,12 +128,10 @@ public class DeliveryTrackingService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
 
-        // Check if tracking already exists
         if (deliveryTrackingRepository.existsByOrderId(orderId)) {
             throw new BadRequestException("Delivery tracking already exists for this order");
         }
 
-        // Validate order status - should be at least PROCESSING
         if (order.getOrderStatus() == OrderStatus.PENDING ||
                 order.getOrderStatus() == OrderStatus.CANCELLED) {
             throw new BadRequestException("Cannot create delivery tracking for " +
@@ -150,7 +164,6 @@ public class DeliveryTrackingService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "DeliveryTracking", "orderId", orderId));
 
-        // Validate status transition
         if (!tracking.canUpdateStatus(newStatus)) {
             throw new BadRequestException("Invalid delivery status transition: " +
                     tracking.getStatus() + " → " + newStatus);
@@ -161,11 +174,9 @@ public class DeliveryTrackingService {
             tracking.setNotes(notes);
         }
 
-        // Set actual delivery date if delivered
         if (newStatus == DeliveryStatus.DELIVERED) {
             tracking.setActualDeliveryDate(LocalDate.now());
 
-            // Also update order status
             Order order = tracking.getOrder();
             if (order.getOrderStatus().canTransitionTo(OrderStatus.DELIVERED)) {
                 order.setOrderStatus(OrderStatus.DELIVERED);
@@ -210,7 +221,7 @@ public class DeliveryTrackingService {
     }
 
     /**
-     * Get delivery tracking by ID (admin)
+     * Get delivery tracking by tracking ID (admin)
      */
     @Transactional(readOnly = true)
     public DeliveryStatusResponse getDeliveryTrackingById(Long trackingId) {

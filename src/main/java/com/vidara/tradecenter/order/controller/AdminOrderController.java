@@ -1,10 +1,18 @@
 package com.vidara.tradecenter.order.controller;
 
 import com.vidara.tradecenter.common.dto.ApiResponse;
+import com.vidara.tradecenter.common.exception.BadRequestException;
+import com.vidara.tradecenter.order.dto.DeliveryStatusResponse;
 import com.vidara.tradecenter.order.dto.OrderListResponse;
 import com.vidara.tradecenter.order.dto.OrderStatisticsResponse;
+import com.vidara.tradecenter.order.dto.RefundRequest;
+import com.vidara.tradecenter.order.dto.RefundResponse;
 import com.vidara.tradecenter.order.dto.UpdateOrderStatusRequest;
+import com.vidara.tradecenter.order.model.enums.DeliveryStatus;
 import com.vidara.tradecenter.order.service.AdminOrderService;
+import com.vidara.tradecenter.order.service.DeliveryTrackingService;
+import com.vidara.tradecenter.security.CurrentUser;
+import com.vidara.tradecenter.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,19 +25,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import com.vidara.tradecenter.common.exception.BadRequestException;
-import com.vidara.tradecenter.order.dto.DeliveryStatusResponse;
-import com.vidara.tradecenter.order.dto.RefundRequest;
-import com.vidara.tradecenter.order.dto.RefundResponse;
-import com.vidara.tradecenter.order.model.enums.DeliveryStatus;
-import com.vidara.tradecenter.order.service.DeliveryTrackingService;
-import com.vidara.tradecenter.security.CurrentUser;
-import com.vidara.tradecenter.security.CustomUserDetails;
 import java.time.LocalDate;
-import java.util.List;
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -40,9 +39,8 @@ public class AdminOrderController {
     private static final Logger logger = LoggerFactory.getLogger(AdminOrderController.class);
 
     private final AdminOrderService adminOrderService;
-    private final DeliveryTrackingService deliveryTrackingService;  // ← NEW
+    private final DeliveryTrackingService deliveryTrackingService;
 
-    // Map Java field names to database column names
     private static final Map<String, String> SORT_FIELD_MAP = Map.of(
             "orderDate", "order_date",
             "totalAmount", "total_amount",
@@ -56,11 +54,10 @@ public class AdminOrderController {
     );
 
     public AdminOrderController(AdminOrderService adminOrderService,
-                                DeliveryTrackingService deliveryTrackingService) {  // ← UPDATED
+                                DeliveryTrackingService deliveryTrackingService) {
         this.adminOrderService = adminOrderService;
-        this.deliveryTrackingService = deliveryTrackingService;  // ← NEW
+        this.deliveryTrackingService = deliveryTrackingService;
     }
-
 
     @GetMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> getAllOrders(
@@ -80,7 +77,6 @@ public class AdminOrderController {
             size = 100;
         }
 
-        // Convert Java field name to database column name
         String dbColumn = SORT_FIELD_MAP.getOrDefault(sortBy, "order_date");
 
         Sort sort = sortDir.equalsIgnoreCase("asc")
@@ -104,14 +100,12 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Orders retrieved successfully", data));
     }
 
-
     @GetMapping("/statistics")
     public ResponseEntity<ApiResponse<OrderStatisticsResponse>> getOrderStatistics() {
         logger.info("Admin requesting order statistics");
         OrderStatisticsResponse stats = adminOrderService.getStatistics();
         return ResponseEntity.ok(ApiResponse.success("Statistics retrieved successfully", stats));
     }
-
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderListResponse>> getOrderById(@PathVariable Long id) {
@@ -120,12 +114,16 @@ public class AdminOrderController {
         return ResponseEntity.ok(ApiResponse.success("Order retrieved successfully", order));
     }
 
-    // ===== NEW REFUND ENDPOINT =====
+    @PutMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<OrderListResponse>> updateOrderStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateOrderStatusRequest request) {
 
-    /**
-     * Process refund for an order
-     * POST /api/admin/orders/{id}/refund
-     */
+        logger.info("Admin updating order {} status to {}", id, request.getNewStatus());
+        OrderListResponse updatedOrder = adminOrderService.updateOrderStatus(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", updatedOrder));
+    }
+
     @PostMapping("/{id}/refund")
     public ResponseEntity<ApiResponse<RefundResponse>> processRefund(
             @PathVariable Long id,
@@ -140,20 +138,13 @@ public class AdminOrderController {
                 "Refund processed successfully", response));
     }
 
-
-    // ===== NEW DELIVERY TRACKING ADMIN ENDPOINTS =====
-
-    /**
-     * Create delivery tracking for an order
-     * POST /api/admin/orders/{id}/delivery-tracking
-     */
     @PostMapping("/{id}/delivery-tracking")
     public ResponseEntity<ApiResponse<DeliveryStatusResponse>> createDeliveryTracking(
             @PathVariable Long id,
             @RequestParam(required = false) String trackingNumber,
             @RequestParam(required = false) String courierName,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate estimatedDeliveryDate) {
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate estimatedDeliveryDate) {
 
         logger.info("Admin creating delivery tracking for order {}", id);
 
@@ -164,11 +155,6 @@ public class AdminOrderController {
                 "Delivery tracking created successfully", response));
     }
 
-
-    /**
-     * Update delivery status
-     * PUT /api/admin/orders/{id}/delivery-status
-     */
     @PutMapping("/{id}/delivery-status")
     public ResponseEntity<ApiResponse<DeliveryStatusResponse>> updateDeliveryStatus(
             @PathVariable Long id,
@@ -192,17 +178,13 @@ public class AdminOrderController {
                 "Delivery status updated successfully", response));
     }
 
-    /**
-     * Update tracking information
-     * PUT /api/admin/orders/{id}/tracking-info
-     */
     @PutMapping("/{id}/tracking-info")
     public ResponseEntity<ApiResponse<DeliveryStatusResponse>> updateTrackingInfo(
             @PathVariable Long id,
             @RequestParam(required = false) String trackingNumber,
             @RequestParam(required = false) String courierName,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate estimatedDeliveryDate) {
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate estimatedDeliveryDate) {
 
         logger.info("Admin updating tracking info for order {}", id);
 
@@ -213,25 +195,16 @@ public class AdminOrderController {
                 "Tracking information updated successfully", response));
     }
 
-    /**
-     * Get delivery tracking for an order
-     * GET /api/admin/orders/{id}/delivery-tracking
-     */
     @GetMapping("/{id}/delivery-tracking")
     public ResponseEntity<ApiResponse<DeliveryStatusResponse>> getDeliveryTracking(
             @PathVariable Long id) {
 
-        DeliveryStatusResponse response = deliveryTrackingService.getDeliveryStatusByOrderId(
-                null, id);  // Admin doesn't need user validation
+        DeliveryStatusResponse response = deliveryTrackingService.getDeliveryTrackingByOrderId(id);
 
         return ResponseEntity.ok(ApiResponse.success(
                 "Delivery tracking retrieved successfully", response));
     }
 
-    /**
-     * Get overdue deliveries
-     * GET /api/admin/orders/deliveries/overdue
-     */
     @GetMapping("/deliveries/overdue")
     public ResponseEntity<ApiResponse<List<DeliveryStatusResponse>>> getOverdueDeliveries() {
         logger.info("Admin fetching overdue deliveries");
@@ -242,10 +215,6 @@ public class AdminOrderController {
                 "Overdue deliveries retrieved successfully", deliveries));
     }
 
-    /**
-     * Get deliveries by status
-     * GET /api/admin/orders/deliveries/status/{status}
-     */
     @GetMapping("/deliveries/status/{status}")
     public ResponseEntity<ApiResponse<List<DeliveryStatusResponse>>> getDeliveriesByStatus(
             @PathVariable String status) {
