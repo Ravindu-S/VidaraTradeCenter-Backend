@@ -124,7 +124,9 @@ public class AdminOrderService {
         logger.info("Admin fetching order statistics");
 
         long totalOrders = orderRepository.count();
-        BigDecimal totalRevenue = orderRepository.sumTotalAmount();
+        BigDecimal grossRevenue = orderRepository.sumGrossRevenue();
+        BigDecimal totalRefunds = orderRepository.sumTotalRefunds();
+        BigDecimal totalRevenue = grossRevenue.subtract(totalRefunds);
 
         long pending = orderRepository.countByOrderStatus(OrderStatus.PENDING);
         long paid = orderRepository.countByOrderStatus(OrderStatus.PAID);
@@ -135,7 +137,9 @@ public class AdminOrderService {
 
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         long todayOrders = orderRepository.countByOrderDateAfter(todayStart);
-        BigDecimal todayRevenue = orderRepository.sumTotalAmountAfter(todayStart);
+        BigDecimal todayGrossRevenue = orderRepository.sumGrossRevenueAfter(todayStart);
+        BigDecimal todayRefunds = orderRepository.sumRefundsAfter(todayStart);
+        BigDecimal todayRevenue = todayGrossRevenue.subtract(todayRefunds);
 
         return new OrderStatisticsResponse(
                 totalOrders,
