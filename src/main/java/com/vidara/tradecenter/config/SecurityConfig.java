@@ -110,6 +110,9 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-resources/**").permitAll()
                         .requestMatchers("/webjars/**").permitAll()
 
+                        // PayHere server-to-server payment notification (no JWT)
+                        .requestMatchers(HttpMethod.POST, "/api/payment/notify").permitAll()
+
                         // Health check
                         .requestMatchers("/actuator/**").permitAll()
 
@@ -133,6 +136,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/brands/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/brands/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/brands/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         // ====== AUTHENTICATED ENDPOINTS ===============
 
