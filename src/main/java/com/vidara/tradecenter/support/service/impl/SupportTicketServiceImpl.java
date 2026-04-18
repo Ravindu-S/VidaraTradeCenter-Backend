@@ -192,7 +192,7 @@ public class SupportTicketServiceImpl implements SupportTicketService {
         ticket.setCategory(ticketData.getCategory());
         ticket.setDescription(ticketData.getDescription().trim());
         ticket.setStatus(TicketStatus.OPEN);
-        ticket.setPriority(TicketPriority.MEDIUM);
+        ticket.setPriority(ticketData.getPriority() != null ? ticketData.getPriority() : TicketPriority.MEDIUM);
         ticket.setUser(user);
 
         SupportTicket savedTicket = supportTicketRepository.save(ticket);
