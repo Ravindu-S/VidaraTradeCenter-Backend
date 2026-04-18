@@ -4,6 +4,7 @@ import com.vidara.tradecenter.common.dto.PagedResponse;
 import com.vidara.tradecenter.common.exception.DuplicateResourceException;
 import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
 import com.vidara.tradecenter.common.util.SlugUtils;
+import com.vidara.tradecenter.order.model.enums.PaymentStatus;
 import com.vidara.tradecenter.product.dto.request.ProductRequest;
 import com.vidara.tradecenter.product.dto.response.ProductDetailResponse;
 import com.vidara.tradecenter.product.dto.response.ProductResponse;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 public class ProductServiceImpl implements ProductService {
 
     private static final Logger logger = LoggerFactory.getLogger(ProductServiceImpl.class);
+    private static final String BEST_SOLD_SORT = "bestSold";
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
@@ -286,6 +288,29 @@ public class ProductServiceImpl implements ProductService {
                                                   String search,
                                                   int page, int size,
                                                   String sortBy, String sortDir) {
+        String normalizedSearch = (search == null || search.trim().isEmpty()) ? null : search.trim();
+        boolean useBestSoldSort = BEST_SOLD_SORT.equalsIgnoreCase(sortBy);
+
+        if (useBestSoldSort) {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Product> productPage = productRepository.findBestSellingProducts(
+                    ProductStatus.ACTIVE,
+                    categoryId,
+                    brandId,
+                    minPrice != null ? BigDecimal.valueOf(minPrice) : null,
+                    maxPrice != null ? BigDecimal.valueOf(maxPrice) : null,
+                    normalizedSearch,
+                    PaymentStatus.COMPLETED,
+                    pageable
+            );
+
+            List<ProductResponse> content = productPage.getContent().stream()
+                    .map(productMapper::toProductResponse)
+                    .collect(Collectors.toList());
+
+            return PagedResponse.of(content, productPage);
+        }
+
         Sort sort = sortDir.equalsIgnoreCase("desc")
                 ? Sort.by(sortBy).descending()
                 : Sort.by(sortBy).ascending();
@@ -313,8 +338,8 @@ public class ProductServiceImpl implements ProductService {
                     cb.lessThanOrEqualTo(root.get("basePrice"), BigDecimal.valueOf(maxPrice)));
         }
 
-        if (search != null && !search.trim().isEmpty()) {
-            String keyword = search.trim().toLowerCase();
+        if (normalizedSearch != null) {
+            String keyword = normalizedSearch.toLowerCase();
             spec = spec.and((root, query, cb) ->
                     cb.or(
                             cb.like(cb.lower(root.get("name")), "%" + keyword + "%"),
