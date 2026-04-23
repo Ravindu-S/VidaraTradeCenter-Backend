@@ -15,6 +15,15 @@ public class CartItemResponse {
   private BigDecimal priceAtAddition;
   private Boolean priceChanged;
 
+  /** Catalog (retail) unit price — same as stored cart price before discounts. */
+  private BigDecimal retailUnitPrice;
+  private Integer bulkDiscountPercent;
+  private Integer membershipDiscountPercent;
+  /** Combined line discount % (bulk + membership, capped at 35). */
+  private BigDecimal lineDiscountPercent;
+  private BigDecimal effectiveUnitPrice;
+  private BigDecimal effectiveSubtotal;
+
   // CONSTRUCTORS
 
   public CartItemResponse() {
@@ -100,5 +109,53 @@ public class CartItemResponse {
 
   public void setPriceChanged(Boolean priceChanged) {
     this.priceChanged = priceChanged;
+  }
+
+  public BigDecimal getRetailUnitPrice() {
+    return retailUnitPrice;
+  }
+
+  public void setRetailUnitPrice(BigDecimal retailUnitPrice) {
+    this.retailUnitPrice = retailUnitPrice;
+  }
+
+  public Integer getBulkDiscountPercent() {
+    return bulkDiscountPercent;
+  }
+
+  public void setBulkDiscountPercent(Integer bulkDiscountPercent) {
+    this.bulkDiscountPercent = bulkDiscountPercent;
+  }
+
+  public Integer getMembershipDiscountPercent() {
+    return membershipDiscountPercent;
+  }
+
+  public void setMembershipDiscountPercent(Integer membershipDiscountPercent) {
+    this.membershipDiscountPercent = membershipDiscountPercent;
+  }
+
+  public BigDecimal getLineDiscountPercent() {
+    return lineDiscountPercent;
+  }
+
+  public void setLineDiscountPercent(BigDecimal lineDiscountPercent) {
+    this.lineDiscountPercent = lineDiscountPercent;
+  }
+
+  public BigDecimal getEffectiveUnitPrice() {
+    return effectiveUnitPrice;
+  }
+
+  public void setEffectiveUnitPrice(BigDecimal effectiveUnitPrice) {
+    this.effectiveUnitPrice = effectiveUnitPrice;
+  }
+
+  public BigDecimal getEffectiveSubtotal() {
+    return effectiveSubtotal;
+  }
+
+  public void setEffectiveSubtotal(BigDecimal effectiveSubtotal) {
+    this.effectiveSubtotal = effectiveSubtotal;
   }
 }

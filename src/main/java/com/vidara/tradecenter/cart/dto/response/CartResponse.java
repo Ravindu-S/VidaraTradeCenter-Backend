@@ -12,6 +12,9 @@ public class CartResponse {
   private List<CartItemResponse> items = new ArrayList<>();
   private BigDecimal totalAmount;
   private Integer totalItems;
+  private boolean membershipActive;
+  private String membershipPlan;
+  private Integer membershipProductDiscountPercent;
 
   // CONSTRUCTORS
 
@@ -66,5 +69,29 @@ public class CartResponse {
 
   public void setTotalItems(Integer totalItems) {
     this.totalItems = totalItems;
+  }
+
+  public boolean isMembershipActive() {
+    return membershipActive;
+  }
+
+  public void setMembershipActive(boolean membershipActive) {
+    this.membershipActive = membershipActive;
+  }
+
+  public String getMembershipPlan() {
+    return membershipPlan;
+  }
+
+  public void setMembershipPlan(String membershipPlan) {
+    this.membershipPlan = membershipPlan;
+  }
+
+  public Integer getMembershipProductDiscountPercent() {
+    return membershipProductDiscountPercent;
+  }
+
+  public void setMembershipProductDiscountPercent(Integer membershipProductDiscountPercent) {
+    this.membershipProductDiscountPercent = membershipProductDiscountPercent;
   }
 }
