@@ -6,6 +6,8 @@ import com.vidara.tradecenter.order.model.Order;
 import com.vidara.tradecenter.order.model.OrderItem;
 import com.vidara.tradecenter.order.model.enums.OrderStatus;
 import com.vidara.tradecenter.order.model.enums.PaymentStatus;
+import com.vidara.tradecenter.membership.model.MembershipPaymentIntent;
+import com.vidara.tradecenter.membership.service.MembershipCheckoutService;
 import com.vidara.tradecenter.order.repository.OrderRepository;
 import com.vidara.tradecenter.payment.config.PayHereProperties;
 import com.vidara.tradecenter.payment.dto.PaymentInitiateResponse;
@@ -36,17 +38,24 @@ public class PayHereService {
     private final PayHereProperties props;
     private final OrderRepository orderRepository;
     private final PayHereNotifyReceiptRepository notifyReceiptRepository;
+    private final MembershipCheckoutService membershipCheckoutService;
 
     public PayHereService(PayHereProperties props,
                           OrderRepository orderRepository,
-                          PayHereNotifyReceiptRepository notifyReceiptRepository) {
+                          PayHereNotifyReceiptRepository notifyReceiptRepository,
+                          MembershipCheckoutService membershipCheckoutService) {
         this.props = props;
         this.orderRepository = orderRepository;
         this.notifyReceiptRepository = notifyReceiptRepository;
+        this.membershipCheckoutService = membershipCheckoutService;
     }
 
     @Transactional
     public PaymentInitiateResponse initiatePayment(Long userId, String orderNumber, String serverBaseUrl) {
+        if (MembershipCheckoutService.isMembershipOrderId(orderNumber)) {
+            return initiateMembershipPayment(userId, orderNumber, serverBaseUrl);
+        }
+
         Order order = orderRepository.findByOrderNumber(orderNumber)
                 .orElseThrow(() -> new OrderNotFoundException("orderNumber", orderNumber));
 
@@ -107,9 +116,61 @@ public class PayHereService {
 
         response.setReturnUrl(props.getFrontendUrl() + "/payment/return?order=" + orderNumber);
         response.setCancelUrl(props.getFrontendUrl() + "/payment/cancel?order=" + orderNumber);
-        response.setNotifyUrl(serverBaseUrl + "/api/payment/notify");
+        response.setNotifyUrl(buildNotifyUrl(serverBaseUrl));
 
         return response;
+    }
+
+    private PaymentInitiateResponse initiateMembershipPayment(Long userId, String orderNumber, String serverBaseUrl) {
+        MembershipPaymentIntent intent = membershipCheckoutService.loadForPaymentInitiate(userId, orderNumber);
+        User user = intent.getUser();
+        BigDecimal amount = intent.getAmount();
+        String formattedAmount = amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
+
+        String hash = generateCheckoutHash(
+                props.getMerchantId(),
+                orderNumber,
+                formattedAmount,
+                CURRENCY,
+                props.getMerchantSecret()
+        );
+
+        String itemsSummary = membershipCheckoutService.buildItemsSummary(intent);
+
+        PaymentInitiateResponse response = new PaymentInitiateResponse();
+        response.setSandbox(props.isSandbox());
+        response.setMerchantId(props.getMerchantId());
+        response.setOrderId(orderNumber);
+        response.setItems(itemsSummary);
+        response.setCurrency(CURRENCY);
+        response.setAmount(amount.setScale(2, RoundingMode.HALF_UP));
+        response.setHash(hash);
+
+        response.setFirstName(user.getFirstName() != null ? user.getFirstName() : "");
+        response.setLastName(user.getLastName() != null ? user.getLastName() : "");
+        response.setEmail(user.getEmail() != null ? user.getEmail() : "");
+        response.setPhone(user.getPhone() != null ? user.getPhone() : "");
+        response.setAddress("");
+        response.setCity("");
+        response.setCountry("Sri Lanka");
+
+        response.setReturnUrl(props.getFrontendUrl() + "/payment/return?order=" + orderNumber);
+        response.setCancelUrl(props.getFrontendUrl() + "/payment/cancel?order=" + orderNumber);
+        response.setNotifyUrl(buildNotifyUrl(serverBaseUrl));
+
+        return response;
+    }
+
+    private String buildNotifyUrl(String requestDerivedBaseUrl) {
+        String base;
+        if (props.getNotifyBaseUrl() != null && !props.getNotifyBaseUrl().isBlank()) {
+            base = props.getNotifyBaseUrl().trim().replaceAll("/+$", "");
+        } else {
+            base = requestDerivedBaseUrl.trim().replaceAll("/+$", "");
+        }
+        String notifyUrl = base + "/api/payment/notify";
+        log.info("PayHere notify_url={}", notifyUrl);
+        return notifyUrl;
     }
 
     @Transactional
@@ -150,6 +211,11 @@ public class PayHereService {
         } catch (NumberFormatException e) {
             log.warn("PayHere notify rejected: invalid status_code '{}' for order_id={}", statusCodeRaw, orderId);
             throw new BadRequestException("Invalid status_code");
+        }
+
+        if (MembershipCheckoutService.isMembershipOrderId(orderId)) {
+            membershipCheckoutService.handlePayHereNotification(orderId, paymentId, payhereAmount, payhereCurrency, code);
+            return;
         }
 
         Order order = orderRepository.findByOrderNumber(orderId)

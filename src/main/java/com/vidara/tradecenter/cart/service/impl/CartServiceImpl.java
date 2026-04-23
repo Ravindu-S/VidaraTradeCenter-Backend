@@ -13,6 +13,8 @@ import com.vidara.tradecenter.cart.repository.CartItemRepository;
 import com.vidara.tradecenter.cart.repository.CartRepository;
 import com.vidara.tradecenter.cart.service.CartService;
 import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
+import com.vidara.tradecenter.membership.service.MembershipPricingCalculator;
+import com.vidara.tradecenter.membership.service.MembershipService;
 import com.vidara.tradecenter.product.model.Product;
 import com.vidara.tradecenter.product.repository.ProductRepository;
 import com.vidara.tradecenter.user.model.User;
@@ -36,17 +38,20 @@ public class CartServiceImpl implements CartService {
   private final ProductRepository productRepository;
   private final UserRepository userRepository;
   private final CartMapper cartMapper;
+  private final MembershipService membershipService;
 
   public CartServiceImpl(CartRepository cartRepository,
       CartItemRepository cartItemRepository,
       ProductRepository productRepository,
       UserRepository userRepository,
-      CartMapper cartMapper) {
+      CartMapper cartMapper,
+      MembershipService membershipService) {
     this.cartRepository = cartRepository;
     this.cartItemRepository = cartItemRepository;
     this.productRepository = productRepository;
     this.userRepository = userRepository;
     this.cartMapper = cartMapper;
+    this.membershipService = membershipService;
   }
 
   @Override
@@ -54,7 +59,9 @@ public class CartServiceImpl implements CartService {
   public CartResponse getOrCreateCart(Long userId) {
     User user = getUserById(userId);
     Cart cart = getOrCreateActiveCart(user);
-    return cartMapper.toCartResponse(cart);
+    CartResponse response = cartMapper.toCartResponse(cart);
+    membershipService.applyPricingToCartResponse(response, userId);
+    return response;
   }
 
   @Override
@@ -79,6 +86,7 @@ public class CartServiceImpl implements CartService {
     }
 
     CartResponse response = cartMapper.toCartResponse(cartRepository.save(cart));
+    membershipService.applyPricingToCartResponse(response, userId);
     logger.info("Successfully added product {} to cart. Total items: {}",
         product.getSku(), response.getItems().size());
     return response;
@@ -100,7 +108,9 @@ public class CartServiceImpl implements CartService {
     cartItemRepository.save(cartItem);
 
     logger.info("Cart item {} updated: quantity {} -> {}", cartItemId, oldQuantity, request.getQuantity());
-    return cartMapper.toCartResponse(cartItem.getCart());
+    CartResponse response = cartMapper.toCartResponse(cartItem.getCart());
+    membershipService.applyPricingToCartResponse(response, userId);
+    return response;
   }
 
   @Override
@@ -116,7 +126,9 @@ public class CartServiceImpl implements CartService {
     cartItemRepository.delete(cartItem);
 
     logger.info("Cart item {} removed (product: {})", cartItemId, productSku);
-    return cartMapper.toCartResponse(cart);
+    CartResponse response = cartMapper.toCartResponse(cart);
+    membershipService.applyPricingToCartResponse(response, userId);
+    return response;
   }
 
   @Override
@@ -139,7 +151,9 @@ public class CartServiceImpl implements CartService {
   public CartResponse getActiveCart(Long userId) {
     User user = getUserById(userId);
     Cart cart = getActiveCart(user);
-    return cartMapper.toCartResponse(cart);
+    CartResponse response = cartMapper.toCartResponse(cart);
+    membershipService.applyPricingToCartResponse(response, userId);
+    return response;
   }
 
   @Override
@@ -154,7 +168,7 @@ public class CartServiceImpl implements CartService {
 
     for (CartItem item : cart.getItems()) {
       Product product = item.getProduct();
-      BigDecimal currentPrice = product.getSalePrice() != null ? product.getSalePrice() : product.getBasePrice();
+      BigDecimal currentPrice = MembershipPricingCalculator.retailUnitPrice(product);
 
       if (!item.getPrice().equals(currentPrice)) {
         logger.info("Price changed for product {} in cart: {} -> {}",
@@ -170,7 +184,9 @@ public class CartServiceImpl implements CartService {
     logger.info("Cart price sync completed for user {}: {} updated, {} unchanged",
         userId, updatedCount, unchangedCount);
 
-    return cartMapper.toCartResponse(cartRepository.save(cart));
+    CartResponse response = cartMapper.toCartResponse(cartRepository.save(cart));
+    membershipService.applyPricingToCartResponse(response, userId);
+    return response;
   }
 
   // PRIVATE HELPER METHODS
@@ -227,7 +243,7 @@ public class CartServiceImpl implements CartService {
   }
 
   private void addNewCartItem(Cart cart, Product product, Integer quantity) {
-    BigDecimal price = product.getSalePrice() != null ? product.getSalePrice() : product.getBasePrice();
+    BigDecimal price = MembershipPricingCalculator.retailUnitPrice(product);
     CartItem newItem = new CartItem(cart, product, quantity, price);
     cart.addItem(newItem);
     cartItemRepository.save(newItem);

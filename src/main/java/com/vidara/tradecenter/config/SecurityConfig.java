@@ -98,6 +98,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/brands/**").permitAll()
 
+                        // Subscription pricing preview (catalog)
+                        .requestMatchers(HttpMethod.GET, "/api/subscription-offers/**").permitAll()
+
+                        // Membership plans (public)
+                        .requestMatchers(HttpMethod.GET, "/api/membership/plans").permitAll()
+
                         // Static resources
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/static/**").permitAll()
