@@ -105,6 +105,11 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
             case "DELIVERED" -> "Your order has been delivered. We hope you enjoy your purchase!";
             case "CANCELLED" -> "Your order has been cancelled. If you have questions, please contact support.";
             case "PAID" -> "Your payment has been confirmed. We'll start processing your order soon.";
+            case "PREPARING" -> "We're preparing your order for shipment.";
+            case "IN_TRANSIT" -> "Your package is in transit.";
+            case "OUT_FOR_DELIVERY" -> "Your order is out for delivery and should arrive soon.";
+            case "RETURNED" -> "A delivery return has been recorded for your order. Our team may contact you.";
+            case "FAILED" -> "We ran into an issue with delivery. Please contact support if you need help.";
             default -> "Your order status has been updated to " + status + ".";
         };
     }

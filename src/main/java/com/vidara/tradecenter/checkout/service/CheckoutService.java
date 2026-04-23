@@ -136,7 +136,7 @@ public class CheckoutService {
         cart.setStatus(CartStatus.MERGED_TO_ORDER);
         cartRepository.save(cart);
 
-        publishOrderConfirmedEvent(saved, user, shippingAddress);
+        // Order confirmation email is sent from PayHereService after successful payment (notify status 2).
 
         CheckoutResponse response = new CheckoutResponse();
         response.setOrderNumber(saved.getOrderNumber());
@@ -211,6 +211,22 @@ public class CheckoutService {
         response.setOrderNumber(saved.getOrderNumber());
         response.setTotalAmount(saved.getTotalAmount());
         return response;
+    }
+
+    /**
+     * Called when PayHere server notify reports successful payment ({@code status_code=2}).
+     */
+    public void publishOrderConfirmationAfterSuccessfulPayment(Order order) {
+        if (order.getShippingAddress() == null) {
+            log.warn("Skipping order confirmation email: no shipping address on order {}", order.getOrderNumber());
+            return;
+        }
+        User user = order.getUser();
+        if (user == null) {
+            log.warn("Skipping order confirmation email: no user on order {}", order.getOrderNumber());
+            return;
+        }
+        publishOrderConfirmedEvent(order, user, order.getShippingAddress());
     }
 
     private void publishOrderConfirmedEvent(Order order, User user, ShippingAddress addr) {
