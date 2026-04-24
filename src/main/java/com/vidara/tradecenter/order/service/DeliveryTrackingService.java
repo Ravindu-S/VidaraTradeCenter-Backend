@@ -7,10 +7,13 @@ import com.vidara.tradecenter.order.model.DeliveryTracking;
 import com.vidara.tradecenter.order.model.Order;
 import com.vidara.tradecenter.order.model.enums.DeliveryStatus;
 import com.vidara.tradecenter.order.model.enums.OrderStatus;
+import com.vidara.tradecenter.notification.dto.OrderStatusUpdateEmail;
+import com.vidara.tradecenter.notification.event.OrderStatusChangedEvent;
 import com.vidara.tradecenter.order.repository.DeliveryTrackingRepository;
 import com.vidara.tradecenter.order.repository.OrderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,11 +28,14 @@ public class DeliveryTrackingService {
 
     private final DeliveryTrackingRepository deliveryTrackingRepository;
     private final OrderRepository orderRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public DeliveryTrackingService(DeliveryTrackingRepository deliveryTrackingRepository,
-                                   OrderRepository orderRepository) {
+                                   OrderRepository orderRepository,
+                                   ApplicationEventPublisher eventPublisher) {
         this.deliveryTrackingRepository = deliveryTrackingRepository;
         this.orderRepository = orderRepository;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -169,6 +175,8 @@ public class DeliveryTrackingService {
                     tracking.getStatus() + " → " + newStatus);
         }
 
+        DeliveryStatus previousStatus = tracking.getStatus();
+
         tracking.setStatus(newStatus);
         if (notes != null && !notes.trim().isEmpty()) {
             tracking.setNotes(notes);
@@ -187,7 +195,30 @@ public class DeliveryTrackingService {
         DeliveryTracking saved = deliveryTrackingRepository.save(tracking);
         logger.info("Updated delivery tracking {} status to {}", saved.getId(), newStatus);
 
+        publishDeliveryStatusNotification(saved.getOrder(), previousStatus, newStatus);
+
         return DeliveryStatusResponse.fromEntity(saved);
+    }
+
+    private void publishDeliveryStatusNotification(Order order, DeliveryStatus from, DeliveryStatus to) {
+        if (order == null || order.getUser() == null) {
+            return;
+        }
+        try {
+            var user = order.getUser();
+            OrderStatusUpdateEmail emailData = new OrderStatusUpdateEmail(
+                    user.getFullName(),
+                    user.getEmail(),
+                    order.getOrderNumber(),
+                    from.name(),
+                    to.name());
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(this, emailData));
+            logger.info("Published delivery status email event for order {} ({} → {})",
+                    order.getOrderNumber(), from, to);
+        } catch (Exception e) {
+            logger.warn("Failed to publish delivery status notification for order {}: {}",
+                    order.getOrderNumber(), e.getMessage());
+        }
     }
 
     /**

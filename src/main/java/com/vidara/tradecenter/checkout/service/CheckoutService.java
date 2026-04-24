@@ -136,7 +136,7 @@ public class CheckoutService {
         cart.setStatus(CartStatus.MERGED_TO_ORDER);
         cartRepository.save(cart);
 
-        publishOrderConfirmedEvent(saved, user, shippingAddress);
+        // Order confirmation email is sent from PayHereService after successful payment (notify status 2).
 
         CheckoutResponse response = new CheckoutResponse();
         response.setOrderNumber(saved.getOrderNumber());
@@ -213,6 +213,24 @@ public class CheckoutService {
         return response;
     }
 
+    /**
+     * Called when PayHere server notify reports successful payment ({@code status_code=2}).
+     */
+    public void publishOrderConfirmationAfterSuccessfulPayment(Order order) {
+        String on = order.getOrderNumber();
+        if (order.getShippingAddress() == null) {
+            log.warn("[ORDER_MAIL] SKIP order={} reason=no shipping address on order entity", on);
+            return;
+        }
+        User user = order.getUser();
+        if (user == null) {
+            log.warn("[ORDER_MAIL] SKIP order={} reason=no user on order entity", on);
+            return;
+        }
+        log.info("[ORDER_MAIL] START pipeline order={} recipientEmail={}", on, user.getEmail());
+        publishOrderConfirmedEvent(order, user, order.getShippingAddress());
+    }
+
     private void publishOrderConfirmedEvent(Order order, User user, ShippingAddress addr) {
         try {
             OrderConfirmationEmail emailData = new OrderConfirmationEmail();
@@ -240,9 +258,10 @@ public class CheckoutService {
             emailData.setShippingAddress(addressStr);
 
             eventPublisher.publishEvent(new OrderConfirmedEvent(this, emailData));
-            log.info("Published OrderConfirmedEvent for order {}", order.getOrderNumber());
+            log.info("[ORDER_MAIL] Event published order={} Spring will send SMTP async to {}",
+                    order.getOrderNumber(), user.getEmail());
         } catch (Exception e) {
-            log.error("Could not publish order confirmation email event for order {}: {}",
+            log.error("[ORDER_MAIL] FAILED to publish OrderConfirmedEvent order={}: {}",
                     order.getOrderNumber(), e.getMessage(), e);
         }
     }

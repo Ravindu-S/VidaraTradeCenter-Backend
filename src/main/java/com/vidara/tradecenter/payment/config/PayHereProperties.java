@@ -25,6 +25,12 @@ public class PayHereProperties {
      */
     private boolean membershipSandboxReconcileEnabled = false;
 
+    /**
+     * When {@link #sandbox} is true, allows {@code POST /api/payment/reconcile-sandbox-order} after PayHere closes in the
+     * browser so the order is marked paid and the confirmation email is sent when server notify cannot reach localhost.
+     */
+    private boolean orderSandboxReconcileEnabled = false;
+
     public String getMerchantId() {
         return merchantId;
     }
@@ -71,5 +77,13 @@ public class PayHereProperties {
 
     public void setMembershipSandboxReconcileEnabled(boolean membershipSandboxReconcileEnabled) {
         this.membershipSandboxReconcileEnabled = membershipSandboxReconcileEnabled;
+    }
+
+    public boolean isOrderSandboxReconcileEnabled() {
+        return orderSandboxReconcileEnabled;
+    }
+
+    public void setOrderSandboxReconcileEnabled(boolean orderSandboxReconcileEnabled) {
+        this.orderSandboxReconcileEnabled = orderSandboxReconcileEnabled;
     }
 }

@@ -7,6 +7,7 @@ import com.vidara.tradecenter.order.model.OrderItem;
 import com.vidara.tradecenter.order.model.enums.OrderStatus;
 import com.vidara.tradecenter.order.model.enums.PaymentStatus;
 import com.vidara.tradecenter.membership.model.MembershipPaymentIntent;
+import com.vidara.tradecenter.checkout.service.CheckoutService;
 import com.vidara.tradecenter.membership.service.MembershipCheckoutService;
 import com.vidara.tradecenter.order.repository.OrderRepository;
 import com.vidara.tradecenter.payment.config.PayHereProperties;
@@ -39,15 +40,52 @@ public class PayHereService {
     private final OrderRepository orderRepository;
     private final PayHereNotifyReceiptRepository notifyReceiptRepository;
     private final MembershipCheckoutService membershipCheckoutService;
+    private final CheckoutService checkoutService;
 
     public PayHereService(PayHereProperties props,
                           OrderRepository orderRepository,
                           PayHereNotifyReceiptRepository notifyReceiptRepository,
-                          MembershipCheckoutService membershipCheckoutService) {
+                          MembershipCheckoutService membershipCheckoutService,
+                          CheckoutService checkoutService) {
         this.props = props;
         this.orderRepository = orderRepository;
         this.notifyReceiptRepository = notifyReceiptRepository;
         this.membershipCheckoutService = membershipCheckoutService;
+        this.checkoutService = checkoutService;
+    }
+
+    /**
+     * Sandbox-only: customer finished PayHere in the browser — mark order paid and send confirmation email
+     * (for local dev when server notify is unreachable).
+     */
+    @Transactional
+    public void reconcileSandboxOrderIfPending(Long userId, String orderNumber) {
+        if (!props.isSandbox() || !props.isOrderSandboxReconcileEnabled()) {
+            throw new BadRequestException(
+                    "Sandbox order reconcile is disabled. For local dev set payhere.order-sandbox-reconcile-enabled=true "
+                            + "or configure payhere.notify-base-url to a public URL PayHere can reach.");
+        }
+        if (MembershipCheckoutService.isMembershipOrderId(orderNumber)) {
+            throw new BadRequestException("Use membership reconcile for MS orders");
+        }
+        Order order = orderRepository.findByOrderNumber(orderNumber)
+                .orElseThrow(() -> new OrderNotFoundException("orderNumber", orderNumber));
+        if (!order.getUser().getId().equals(userId)) {
+            throw new PaymentException("Order does not belong to this user", orderNumber);
+        }
+        if (order.getPaymentStatus() != PaymentStatus.PENDING) {
+            log.info("[ORDER_MAIL] Sandbox reconcile skipped order={} paymentStatus={} (no email trigger; already finalized)",
+                    orderNumber, order.getPaymentStatus());
+            return;
+        }
+        order.setPaymentStatus(PaymentStatus.COMPLETED);
+        order.setOrderStatus(OrderStatus.PAID);
+        orderRepository.save(order);
+        log.info("[ORDER_MAIL] Sandbox reconcile marking PAID order={} then running confirmation pipeline", orderNumber);
+        checkoutService.publishOrderConfirmationAfterSuccessfulPayment(order);
+        log.warn(
+                "SANDBOX: Order {} marked paid via client callback (send confirmation email). Disable payhere.order-sandbox-reconcile-enabled for live.",
+                orderNumber);
     }
 
     @Transactional
@@ -233,6 +271,9 @@ public class PayHereService {
             return;
         }
 
+        PaymentStatus paymentStatusBefore = order.getPaymentStatus();
+        OrderStatus orderStatusBefore = order.getOrderStatus();
+
         switch (code) {
             case 2 -> {
                 order.setPaymentStatus(PaymentStatus.COMPLETED);
@@ -264,6 +305,13 @@ public class PayHereService {
                 log.info("PayHere duplicate notification (race on payment_id): order_id={}, payment_id={}",
                         orderId, paymentId);
             }
+        }
+
+        boolean newlyPaid = code == 2
+                && (paymentStatusBefore != PaymentStatus.COMPLETED || orderStatusBefore != OrderStatus.PAID);
+        if (newlyPaid) {
+            log.info("[ORDER_MAIL] PayHere notify: newly paid order={} triggering confirmation pipeline", orderId);
+            checkoutService.publishOrderConfirmationAfterSuccessfulPayment(order);
         }
     }
 
