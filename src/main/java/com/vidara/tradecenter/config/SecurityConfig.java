@@ -150,9 +150,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/brands/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/brands/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/brands/**").hasRole("ADMIN")
+                        .requestMatchers("/api/admin/support/**").hasRole("ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                         // ====== AUTHENTICATED ENDPOINTS ===============
+
+                        // Support tickets (authenticated users only)
+                        .requestMatchers("/api/support/**").authenticated()
 
                         // All other requests require authentication
                         .anyRequest().authenticated()
