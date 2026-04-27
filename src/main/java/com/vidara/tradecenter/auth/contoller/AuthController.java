@@ -7,6 +7,7 @@ import com.vidara.tradecenter.auth.dto.response.AuthResponse;
 import com.vidara.tradecenter.auth.dto.response.UserResponse;
 import com.vidara.tradecenter.auth.service.AuthService;
 import com.vidara.tradecenter.common.dto.ApiResponse;
+import com.vidara.tradecenter.common.exception.ResourceNotFoundException;
 import com.vidara.tradecenter.security.CurrentUser;
 import com.vidara.tradecenter.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -52,9 +53,19 @@ public class AuthController {
     // FORGOT PASSWORD - Send reset email
     @PostMapping("/forgot-password")
     public ResponseEntity<ApiResponse<Void>> forgotPassword(@RequestParam String email) {
-        authService.sendForgotPasswordEmail(email);
-        return ResponseEntity
-                .ok(ApiResponse.success("Password reset link has been sent to your email", null));
+        try {
+            authService.sendForgotPasswordEmail(email);
+            return ResponseEntity
+                    .ok(ApiResponse.success("Password reset link has been sent to your email", null));
+        } catch (ResourceNotFoundException ex) {
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("User with this email not found"));
+        } catch (Exception ex) {
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Failed to process password reset request. Please try again later."));
+        }
     }
 
     // RESET PASSWORD - Reset password with token

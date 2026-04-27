@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
@@ -34,6 +35,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     }
 
     @Override
+    @Async
     public void sendOrderConfirmation(OrderConfirmationEmail emailData) {
         try {
             Context ctx = new Context();
@@ -60,6 +62,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     }
 
     @Override
+    @Async
     public void sendOrderStatusUpdate(OrderStatusUpdateEmail emailData) {
         try {
             Context ctx = new Context();
@@ -116,6 +119,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     }
 
     @Override
+    @Async
     public void sendTicketConfirmation(String toEmail, String ticketId, String subject) {
         try {
             Context ctx = new Context();
@@ -134,6 +138,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     }
 
     @Override
+    @Async
     public void sendTicketReply(String toEmail, String ticketId, String adminMessage) {
         try {
             Context ctx = new Context();
@@ -152,6 +157,7 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
     }
 
     @Override
+    @Async
     public void sendPasswordResetEmail(PasswordResetEmail emailData) {
         try {
             Context ctx = new Context();
@@ -165,7 +171,6 @@ public class EmailNotificationServiceImpl implements EmailNotificationService {
             log.info("[PASSWORD_RESET] SUCCESS email sent to={}", emailData.getCustomerEmail());
         } catch (Exception e) {
             log.error("[PASSWORD_RESET] SMTP FAILED to={} error={}", emailData.getCustomerEmail(), e.getMessage(), e);
-            throw new RuntimeException("Failed to send password reset email", e);
         }
     }
 }
